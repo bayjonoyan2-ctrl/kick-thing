@@ -10,8 +10,8 @@ INPUT_FILE = "video.mp4"
 
 STREAM_URL = os.environ.get("KICK_STREAM_URL", "").rstrip("/")
 STREAM_KEY = os.environ.get("KICK_STREAM_KEY", "")
-GH_TOKEN = os.environ.get("GH_TOKEN", "")
-REPO = os.environ.get("REPO", "")
+GH_TOKEN   = os.environ.get("GH_TOKEN", "")
+REPO       = os.environ.get("REPO", "")
 
 if not STREAM_URL or not STREAM_KEY:
     print("❌ Missing KICK_STREAM_URL or KICK_STREAM_KEY")
@@ -19,8 +19,9 @@ if not STREAM_URL or not STREAM_KEY:
 
 RTMP_URL = f"{STREAM_URL}/app/{STREAM_KEY}"
 
-STREAM_LIMIT_SECONDS = 3 * 3600 + 30 * 60   # 3h30m
-TRIGGER_AT_SECONDS   = 3 * 3600 + 10 * 60   # 3h10m
+# Handover timings (as you asked)
+TRIGGER_AT_SECONDS = 3 * 3600        # 3h00m -> fire next workflow
+HANDOVER_AT_SECONDS = 3 * 3600 + 30 * 60  # 3h30m -> this run stops
 
 def get_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -55,27 +56,27 @@ def get_height(path):
 def build_vf(path):
     h = get_height(path)
     fps = get_fps(path)
-    # Rule:
-    #  - 720p30  -> keep as is (720p30)
-    #  - everything else (1080p30/60, 720p60) -> 720p60
+    # 720p30 stays; everything else forced to 720p60
     if h == 720 and fps < 50:
         return "scale=1280:720,fps=30,format=yuv420p", 30
     return "scale=1280:720,fps=60,format=yuv420p", 60
 
 def trigger_next(start_offset):
-    print(f"\n🚀 Triggering next workflow from {start_offset:.0f}s ...")
+    print(f"\n🚀 Triggering next stream workflow from {start_offset:.0f}s ...")
     url = f"https://api.github.com/repos/{REPO}/actions/workflows/stream.yml/dispatches"
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {GH_TOKEN}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    next_offset = str(int(start_offset + STREAM_LIMIT_SECONDS))
-    data = json.dumps({"ref": "main", "inputs": {"start_offset": next_offset}}).encode("utf-8")
+    data = json.dumps({
+        "ref": "main",
+        "inputs": {"start_offset": str(int(start_offset))}
+    }).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req) as resp:
-            print(f"✅ Next workflow triggered ({resp.status})")
+        with urllib.request.urlopen(req) as r:
+            print(f"✅ Next workflow triggered ({r.status})")
     except Exception as e:
         print(f"❌ Trigger failed: {e}")
 
@@ -84,19 +85,19 @@ def stream():
     if total <= 0:
         print("❌ Cannot read duration")
         return
+
     seek = float(os.environ.get("START_OFFSET", "0.0") or "0.0")
     vf, fps = build_vf(INPUT_FILE)
-    print(f"📼 Duration={total:.1f}s start={seek:.1f}s vf='{vf}' fps={fps}")
+    print(f"📼 Duration={total:.1f}s  start={seek:.1f}s  vf='{vf}'  fps={fps}")
 
     while seek < total:
         remaining = total - seek
-        max_run = min(STREAM_LIMIT_SECONDS, remaining)
+        max_run = min(HANDOVER_AT_SECONDS, remaining)
         print(f"\n▶️ Streaming from {seek:.1f}s for max {max_run:.1f}s")
 
         cmd = [
             "ffmpeg", "-re",
-            "-ss", f"{seek}",
-            "-i", INPUT_FILE,
+            "-ss", f"{seek}", "-i", INPUT_FILE,
             "-t", f"{max_run}",
             "-vf", vf,
             "-c:v", "libx264",
@@ -107,22 +108,20 @@ def stream():
             "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
             "-f", "flv", RTMP_URL,
         ]
-
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
         start_t = time.time()
-        last_t = 0.0
-        stall = 0
+        last_t  = 0.0
+        stall   = 0
         triggered = False
 
         for line in proc.stdout:
             if "time=" in line or "frame=" in line:
-                sys.stdout.write(line)
-                sys.stdout.flush()
+                sys.stdout.write(line); sys.stdout.flush()
             m = re.search(r"time=(\d+):(\d+):(\d+\.\d+)", line)
             if m:
-                h, mi, s = m.groups()
-                cur = int(h)*3600 + int(mi)*60 + float(s)
+                hh, mm, ss = m.groups()
+                cur = int(hh) * 3600 + int(mm) * 60 + float(ss)
                 if cur > last_t:
                     last_t = cur
                     stall = 0
@@ -131,7 +130,7 @@ def stream():
                 if (not triggered and cur >= TRIGGER_AT_SECONDS
                         and remaining > max_run):
                     triggered = True
-                    trigger_next(seek)
+                    trigger_next(seek + TRIGGER_AT_SECONDS)
             if stall > 300:
                 print("\n⚠️ Stream stalled, restarting...")
                 break
@@ -146,11 +145,11 @@ def stream():
             break
 
         seek += max(1.0, played - 2.0)
-        print(f"🔄 Restarting from {seek:.1f}s ...")
-        time.sleep(5)
-        if seek >= total - 10:
-            print("\n✅ Video finished")
+        if seek >= total - 5:
+            print("\n✅ Video completely finished.")
             break
+        print(f"🔄 Restarting from {seek:.1f}s ...")
+        time.sleep(3)
 
 if __name__ == "__main__":
     stream()
