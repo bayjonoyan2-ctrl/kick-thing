@@ -4,13 +4,14 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 video_url = os.environ.get("VIDEO_URL")
-start_in_hours = os.environ.get("START_IN_HOURS", "0")
+kick_hours_raw = os.environ.get("SCHEDULE_KICK_HOURS", "0") or "0"
+twitch_hours_raw = os.environ.get("SCHEDULE_TWITCH_HOURS", "0") or "0"
 
 if not video_url:
     print("❌ VIDEO_URL missing")
     sys.exit(1)
 
-# Single priority chain: yt-dlp picks FIRST match, does not download all.
+# Single priority chain: yt-dlp picks FIRST match.
 FORMAT = (
     "bv*[height=720][fps>=50]+ba/"
     "b[height=720][fps>=50]/"
@@ -51,13 +52,31 @@ probe = subprocess.run(
 )
 print("✅ Final format:\n" + probe.stdout)
 
-# --- Write schedule timestamp for scheduler.py ---
-try:
-    hours = float(start_in_hours)
-except ValueError:
-    hours = 0.0
+# --- Write schedule timestamps for both platforms ---
+now = datetime.now(timezone.utc)
 
-start_at = datetime.now(timezone.utc) + timedelta(hours=hours)
-with open("schedule.txt", "w", encoding="utf-8") as f:
-    f.write(start_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
-print(f"⏰ Stream scheduled to start at: {start_at.isoformat()}")
+try:
+    kick_hours = float(kick_hours_raw)
+except ValueError:
+    kick_hours = 0.0
+
+try:
+    twitch_hours = float(twitch_hours_raw)
+except ValueError:
+    twitch_hours = 0.0
+
+if kick_hours > 0:
+    kick_at = now + timedelta(hours=kick_hours)
+    with open("schedule_kick.txt", "w", encoding="utf-8") as f:
+        f.write(kick_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    print(f"⏰ Kick stream scheduled for: {kick_at.isoformat()}")
+else:
+    print("⏭️ Kick not scheduled (0 hours).")
+
+if twitch_hours > 0:
+    twitch_at = now + timedelta(hours=twitch_hours)
+    with open("schedule_twitch.txt", "w", encoding="utf-8") as f:
+        f.write(twitch_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    print(f"⏰ Twitch stream scheduled for: {twitch_at.isoformat()}")
+else:
+    print("⏭️ Twitch not scheduled (0 hours).")

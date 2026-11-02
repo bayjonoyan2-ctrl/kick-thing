@@ -6,9 +6,13 @@ on:
       video_url:
         description: 'YouTube / Video URL'
         required: true
-      start_in_hours:
-        description: 'Start stream after N hours (0 = manual only)'
-        required: false
+      schedule_kick_hours:
+        description: 'Start Kick stream in N hours (0 = off, 0.5 = 30 mins)'
+        required: true
+        default: '0'
+      schedule_twitch_hours:
+        description: 'Start Twitch stream in N hours (0 = off, 0.5 = 30 mins)'
+        required: true
         default: '0'
 
 jobs:
@@ -42,15 +46,16 @@ jobs:
       - name: Download (720p60 priority)
         env:
           VIDEO_URL: ${{ github.event.inputs.video_url }}
-          START_IN_HOURS: ${{ github.event.inputs.start_in_hours }}
+          SCHEDULE_KICK_HOURS: ${{ github.event.inputs.schedule_kick_hours }}
+          SCHEDULE_TWITCH_HOURS: ${{ github.event.inputs.schedule_twitch_hours }}
         run: python scripts/download.py
 
-      - name: Commit schedule.txt
+      - name: Commit schedule files
         run: |
           git config user.email "actions@github.com"
           git config user.name "github-actions"
-          git add schedule.txt
-          git commit -m "Set stream schedule: $(cat schedule.txt)" || true
+          git add schedule_kick.txt schedule_twitch.txt
+          git commit -m "Update stream schedules" || true
           git push
 
       - name: Upload artifact

@@ -19,9 +19,9 @@ if not STREAM_URL or not STREAM_KEY:
 
 RTMP_URL = f"{STREAM_URL}/app/{STREAM_KEY}"
 
-# Handover timings (as you asked)
-TRIGGER_AT_SECONDS = 3 * 3600        # 3h00m -> fire next workflow
-HANDOVER_AT_SECONDS = 3 * 3600 + 30 * 60  # 3h30m -> this run stops
+# 3h trigger, 3h30m handover
+TRIGGER_AT_SECONDS = 3 * 3600
+HANDOVER_AT_SECONDS = 3 * 3600 + 30 * 60
 
 def get_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -62,7 +62,7 @@ def build_vf(path):
     return "scale=1280:720,fps=60,format=yuv420p", 60
 
 def trigger_next(start_offset):
-    print(f"\n🚀 Triggering next stream workflow from {start_offset:.0f}s ...")
+    print(f"\n🚀 Triggering next Kick stream workflow from {start_offset:.0f}s ...")
     url = f"https://api.github.com/repos/{REPO}/actions/workflows/stream.yml/dispatches"
     headers = {
         "Accept": "application/vnd.github+json",
