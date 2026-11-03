@@ -153,4 +153,10 @@ def stream():
         time.sleep(3)
 
 if __name__ == "__main__":
+    # If this is a handover (offset > 0), wait 15 minutes before starting
+    start_off = float(os.environ.get("START_OFFSET", "0.0") or "0.0")
+    if start_off > 0:
+        print("⏳ Handover detected. Waiting 15 minutes for old stream to finish...")
+        time.sleep(15 * 60)
+        
     stream()
