@@ -8,7 +8,6 @@ import json
 
 INPUT_FILE = "video.mp4"
 
-# Twitch RTMP Global Ingest
 STREAM_URL = "rtmp://ingest.global-contribute.live-video.net/app"
 STREAM_KEY = os.environ.get("TWITCH_STREAM_KEY", "")
 GH_TOKEN   = os.environ.get("GH_TOKEN", "")
@@ -20,9 +19,9 @@ if not STREAM_KEY:
 
 RTMP_URL = f"{STREAM_URL}/{STREAM_KEY}"
 
-# 3h trigger, 3h30m handover
-TRIGGER_AT_SECONDS = 3 * 3600
-HANDOVER_AT_SECONDS = 3 * 3600 + 30 * 60
+# Overlap logic: New server starts at 3h30m, Old server dies at 3h32m
+TRIGGER_AT_SECONDS = (3 * 3600) + (28 * 60)   # 3h28m trigger
+HANDOVER_AT_SECONDS = (3 * 3600) + (32 * 60)  # 3h32m handover
 
 def get_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -57,7 +56,6 @@ def get_height(path):
 def build_vf(path):
     h = get_height(path)
     fps = get_fps(path)
-    # Twitch new streamer rules: 720p30 stays 720p30. Everything else 720p60.
     if h == 720 and fps < 50:
         return "scale=1280:720,fps=30,format=yuv420p", 30
     return "scale=1280:720,fps=60,format=yuv420p", 60
@@ -153,10 +151,9 @@ def stream():
         time.sleep(3)
 
 if __name__ == "__main__":
-    # If this is a handover (offset > 0), wait 15 minutes before starting
     start_off = float(os.environ.get("START_OFFSET", "0.0") or "0.0")
     if start_off > 0:
-        print("⏳ Handover detected. Waiting 15 minutes for old stream to finish...")
-        time.sleep(15 * 60)
+        print("⏳ Handover detected. Waiting 2 minutes for overlap...")
+        time.sleep(2 * 60)
         
     stream()
