@@ -11,15 +11,16 @@ if not video_url:
     print("❌ VIDEO_URL missing")
     sys.exit(1)
 
+# 1. Attempt 720p60
+# 2. Attempt 720p30
+# 3. Attempt 1080p30
+# 4. Attempt 1080p60
+# 5. Attempt best available (but explicitly avoid low quality if possible)
 FORMAT = (
-    "bv*[height=720][fps>=50]+ba/"
-    "b[height=720][fps>=50]/"
-    "bv*[height=720]+ba/"
-    "b[height=720]/"
-    "bv*[height=1080][fps<50]+ba/"
-    "b[height=1080][fps<50]/"
-    "bv*[height=1080][fps>=50]+ba/"
-    "b[height=1080][fps>=50]/"
+    "bv*[height=720][fps>=50]+ba/b[height=720][fps>=50]/"
+    "bv*[height=720]+ba/b[height=720]/"
+    "bv*[height=1080][fps<50]+ba/b[height=1080][fps<50]/"
+    "bv*[height=1080][fps>=50]+ba/b[height=1080][fps>=50]/"
     "b"
 )
 
@@ -32,12 +33,22 @@ cmd = [
 ]
 
 if subprocess.run(cmd).returncode != 0:
-    print("❌ Download failed.")
+    print("❌ Download failed. YouTube might be blocking the request (403 Error). Try using different cookies.")
     sys.exit(1)
+
+# Check the downloaded video resolution to ensure it's not a forced 360p fallback
+probe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height", "-of", "default=noprint_wrappers=1:nokey=1", "raw_video.mp4"]
+height_out = subprocess.run(probe_cmd, capture_output=True, text=True).stdout.strip()
+try:
+    h = int(height_out)
+    if h < 720:
+        print(f"⚠️ WARNING: Downloaded video is only {h}p. YouTube forced a lower quality due to bot protection. The quality will be low.")
+except ValueError:
+    pass
 
 print("🎨 Rendering QR overlay (this takes a minute)...")
 
-# We use ultrafast and CRF 28 to make rendering as fast as possible
+# Use ultrafast, CRF 28, and threads 0 for max CPU speed
 filter_complex = (
     "[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720[base];"
     "color=c=black@0.4:s=144x92,format=rgba[bg_box];"
@@ -50,7 +61,7 @@ cmd_render = [
     "ffmpeg", "-y", "-i", "raw_video.mp4",
     "-filter_complex", filter_complex,
     "-map", "[out]", "-map", "0:a",
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264", "-preset", "ultrafast", "-threads", "0", "-crf", "28", "-pix_fmt", "yuv420p",
     "-c:a", "copy", "video.mp4"
 ]
 
