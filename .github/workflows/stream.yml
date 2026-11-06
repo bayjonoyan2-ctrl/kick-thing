@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       start_offset:
-        description: 'Start offset in seconds (for long-video handover)'
+        description: 'Start offset in seconds'
         required: false
         default: '0'
 
@@ -29,10 +29,25 @@ jobs:
 
       - name: Download saved video artifact
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_FOR_TRIGGER }}
         run: |
-          RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId')
-          echo "Using download run: $RUN_ID"
+          echo "Looking for latest successful download..."
+          RUN_ID=""
+          for i in {1..10}; do
+            RUN_ID=$(gh run list --workflow=download.yml --status=success --limit=1 --json databaseId --jq '.[0].databaseId' || true)
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              echo "Found Run ID: $RUN_ID"
+              break
+            fi
+            echo "No successful download found yet. Waiting 10 seconds..."
+            sleep 10
+          done
+          
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" == "null" ]; then
+            echo "❌ Error: Could not find a successful Download Video workflow."
+            exit 1
+          fi
+          
           gh run download $RUN_ID -n downloaded-video
 
       - name: Stream to Kick
