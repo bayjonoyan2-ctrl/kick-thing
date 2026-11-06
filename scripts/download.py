@@ -11,7 +11,6 @@ if not video_url:
     print("❌ VIDEO_URL missing")
     sys.exit(1)
 
-# Single priority chain: yt-dlp picks FIRST match.
 FORMAT = (
     "bv*[height=720][fps>=50]+ba/"
     "b[height=720][fps>=50]/"
@@ -24,33 +23,45 @@ FORMAT = (
     "b"
 )
 
-print(f"⬇️ Downloading with priority selector:\n{FORMAT}\n")
-
+print(f"⬇️ Downloading with priority selector...")
 cmd = [
-    "yt-dlp",
-    "--cookies", "cookies.txt",
-    "--js-runtimes", "deno",
-    "--remote-components", "ejs:github",
-    "-f", FORMAT,
-    "--merge-output-format", "mp4",
-    "--no-part",
-    "--no-playlist",
-    "-o", "video.mp4",
-    video_url,
+    "yt-dlp", "--cookies", "cookies.txt", "--js-runtimes", "deno",
+    "--remote-components", "ejs:github", "-f", FORMAT,
+    "--merge-output-format", "mp4", "--no-part", "--no-playlist",
+    "-o", "raw_video.mp4", video_url,
 ]
 
-res = subprocess.run(cmd)
-if res.returncode != 0 or not os.path.exists("video.mp4"):
+if subprocess.run(cmd).returncode != 0:
     print("❌ Download failed.")
     sys.exit(1)
 
-probe = subprocess.run(
-    ["ffprobe", "-v", "error", "-select_streams", "v:0",
-     "-show_entries", "stream=width,height,r_frame_rate",
-     "-of", "default=noprint_wrappers=1", "video.mp4"],
-    capture_output=True, text=True
+print("🎨 Rendering QR overlay (this takes a minute)...")
+
+# We use ultrafast and CRF 28 to make rendering as fast as possible
+filter_complex = (
+    "[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720[base];"
+    "color=c=black@0.4:s=144x92,format=rgba[bg_box];"
+    "[base][bg_box]overlay=x=2:y=143[base_with_box];"
+    "movie=scripts/qr.png,scale=144:92[qr];"
+    "[base_with_box][qr]overlay=x=2:y=143[out]"
 )
-print("✅ Final format:\n" + probe.stdout)
+
+cmd_render = [
+    "ffmpeg", "-y", "-i", "raw_video.mp4",
+    "-filter_complex", filter_complex,
+    "-map", "[out]", "-map", "0:a",
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+    "-c:a", "copy", "video.mp4"
+]
+
+if subprocess.run(cmd_render).returncode != 0:
+    print("❌ Rendering failed.")
+    sys.exit(1)
+
+if os.path.exists("raw_video.mp4"):
+    os.remove("raw_video.mp4")
+
+print("✅ Video downloaded and QR overlay rendered!")
 
 # --- Write schedule timestamps for both platforms ---
 now = datetime.now(timezone.utc)
