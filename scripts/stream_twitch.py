@@ -41,8 +41,19 @@ def get_height(path):
 def build_vf(path):
     h = get_height(path)
     fps = get_fps(path)
-    if h == 720 and fps < 50: return "scale=1280:720,fps=30,format=yuv420p", 30
-    return "scale=1280:720,fps=60,format=yuv420p", 60
+    if h == 720 and fps < 50: 
+        base = "scale=1280:720,fps=30,format=yuv420p"
+    else: 
+        base = "scale=1280:720,fps=60,format=yuv420p"
+    
+    vf_filter = (
+        f"{base}[base];"
+        "color=c=black@0.4:s=144x92,format=rgba[bg_box];"
+        "[base][bg_box]overlay=x=2:y=143[base_with_box];"
+        "movie=scripts/qr.png,scale=144:92[qr];"
+        "[base_with_box][qr]overlay=x=2:y=143[out]"
+    )
+    return vf_filter, (30 if "fps=30" in base else 60)
 
 def trigger_next(start_offset):
     print(f"\n🚀 Triggering next Twitch stream from {start_offset:.0f}s ...")
@@ -59,7 +70,7 @@ def stream():
     if total <= 0: return
 
     seek = float(os.environ.get("START_OFFSET", "0.0") or "0.0")
-    vf, fps = build_vf(INPUT_FILE)
+    vf_complex, fps = build_vf(INPUT_FILE)
     
     while seek < total:
         remaining = total - seek
@@ -68,7 +79,8 @@ def stream():
 
         cmd = [
             "ffmpeg", "-re", "-ss", f"{seek}", "-i", INPUT_FILE, "-t", f"{max_run}",
-            "-vf", vf, "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-filter_complex", vf_complex, "-map", "[out]", "-map", "0:a",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
             "-b:v", "4500k", "-maxrate", "4500k", "-bufsize", "9000k", "-g", str(fps * 2),
             "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-f", "flv", RTMP_URL
         ]
