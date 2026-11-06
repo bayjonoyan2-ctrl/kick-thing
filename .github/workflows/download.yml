@@ -7,11 +7,11 @@ on:
         description: 'YouTube / Video URL'
         required: true
       schedule_kick_hours:
-        description: 'Start Kick stream in N hours (0 = off, 0.5 = 30 mins)'
+        description: 'Start Kick stream in N hours (0 = off)'
         required: true
         default: '0'
       schedule_twitch_hours:
-        description: 'Start Twitch stream in N hours (0 = off, 0.5 = 30 mins)'
+        description: 'Start Twitch stream in N hours (0 = off)'
         required: true
         default: '0'
 
@@ -37,8 +37,11 @@ jobs:
       - name: Install yt-dlp
         run: pip install -r scripts/requirements.txt
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (Fast Mirror)
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
 
       - name: Write cookies
         run: echo "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
