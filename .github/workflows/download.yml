@@ -46,12 +46,18 @@ jobs:
       - name: Write cookies
         run: echo "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
 
-      - name: Download (720p60 priority)
+      - name: 1. Download
         env:
           VIDEO_URL: ${{ github.event.inputs.video_url }}
           SCHEDULE_KICK_HOURS: ${{ github.event.inputs.schedule_kick_hours }}
           SCHEDULE_TWITCH_HOURS: ${{ github.event.inputs.schedule_twitch_hours }}
         run: python scripts/download.py
+
+      - name: 2. Render QR Overlay
+        run: python scripts/render.py
+
+      - name: 3. Save Video
+        run: mv rendered.mp4 video.mp4
 
       - name: Commit schedule files
         run: |
