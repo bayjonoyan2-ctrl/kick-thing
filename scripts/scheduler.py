@@ -6,6 +6,17 @@ from datetime import datetime, timezone
 
 GH_TOKEN = os.environ.get("GH_TOKEN", "")
 REPO     = os.environ.get("REPO", "")
+RUN_ID   = os.environ.get("RUN_ID", "")
+
+def delete_this_run():
+    if RUN_ID:
+        url = f"https://api.github.com/repos/{REPO}/actions/runs/{RUN_ID}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {GH_TOKEN}", "Accept": "application/vnd.github+json"}, method="DELETE")
+        try:
+            urllib.request.urlopen(req)
+            print("🧹 Deleted this workflow log to prevent spam.")
+        except Exception as e:
+            print(f"Could not delete log: {e}")
 
 def check_and_trigger(schedule_file, workflow_file, platform_name):
     if not os.path.exists(schedule_file): return False
@@ -17,8 +28,7 @@ def check_and_trigger(schedule_file, workflow_file, platform_name):
 
     now = datetime.now(timezone.utc)
     if now < start_at:
-        mins = (start_at - now).total_seconds() / 60.0
-        print(f"⏳ [{platform_name}] Not yet. {mins:.0f} minutes remaining.")
+        print(f"⏳ [{platform_name}] Not yet. {(start_at - now).total_seconds() / 60.0:.0f} minutes remaining.")
         return False
 
     print(f"✅ [{platform_name}] Time reached. Triggering {workflow_file}...")
@@ -29,7 +39,7 @@ def check_and_trigger(schedule_file, workflow_file, platform_name):
     try:
         with urllib.request.urlopen(req) as r:
             print(f"🚀 [{platform_name}] Workflow triggered ({r.status})")
-            open(schedule_file, "w").write("") # Clear file
+            open(schedule_file, "w").write("")
             return True
     except Exception as e:
         print(f"❌ [{platform_name}] Trigger failed: {e}")
@@ -44,3 +54,6 @@ if kick or twitch:
     os.system('git add schedule_*.txt')
     os.system('git commit -m "Clear schedule" || true')
     os.system('git push')
+
+# Delete this specific run so it disappears from the Actions tab
+delete_this_run()

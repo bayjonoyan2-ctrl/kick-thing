@@ -2,7 +2,7 @@ name: 3. Schedule Stream
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -25,4 +25,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_FOR_TRIGGER }}
           REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: python scripts/scheduler.py
