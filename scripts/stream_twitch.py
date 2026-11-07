@@ -15,8 +15,8 @@ REPO       = os.environ.get("REPO", "")
 if not STREAM_KEY: sys.exit(1)
 RTMP_URL = f"{STREAM_URL}/{STREAM_KEY}"
 
-TRIGGER_AT_SECONDS = (3 * 3600) - (30 * 60) 
-HANDOVER_AT_SECONDS = (3 * 3600) + (5 * 60) 
+TRIGGER_AT_SECONDS = (2 * 3600) + (30 * 60) 
+HANDOVER_AT_SECONDS = (3 * 3600) + (35 * 60) 
 
 def get_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path]
@@ -106,6 +106,6 @@ def stream():
 if __name__ == "__main__":
     start_off = float(os.environ.get("START_OFFSET", "0.0") or "0.0")
     if start_off > 0:
-        print("⏳ Handover detected. Waiting 30 minutes for overlap...")
-        time.sleep(30 * 60)
+        print("⏳ Handover detected. Waiting 1 hour for overlap...")
+        time.sleep(1 * 3600)
     stream()
