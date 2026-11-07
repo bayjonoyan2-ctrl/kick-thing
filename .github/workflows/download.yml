@@ -59,17 +59,19 @@ jobs:
       - name: 3. Save Video
         run: mv rendered.mp4 video.mp4
 
-      - name: Commit schedule files
-        run: |
-          git config user.email "actions@github.com"
-          git config user.name "github-actions"
-          git add schedule_kick.txt schedule_twitch.txt
-          git commit -m "Update stream schedules" || true
-          git push
-
-      - name: Upload artifact
+      # THIS IS THE FIX: Upload artifact FIRST before any git pushes
+      - name: 4. Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: downloaded-video
           path: video.mp4
           retention-days: 3
+
+      - name: 5. Commit schedule files
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add schedule_kick.txt schedule_twitch.txt
+          git commit -m "Update stream schedules" || true
+          git pull --rebase origin main
+          git push
